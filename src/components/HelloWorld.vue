@@ -27,23 +27,61 @@
             <v-stepper v-model="currentStep">
               <v-stepper-header>
                 <v-stepper-step :complete="currentStep > 0" step="1">
-                  Name of step 1
+                  兼容性测试
                 </v-stepper-step>
 
                 <v-divider></v-divider>
-
                 <v-stepper-step :complete="currentStep > 1" step="2">
-                  Name of step 2
+                  麦克风测试
                 </v-stepper-step>
 
                 <v-divider></v-divider>
 
-                <v-stepper-step step="3"> Name of step 3 </v-stepper-step>
+                <v-stepper-step :complete="currentStep > 2" step="3">
+                  扬声器测试
+                </v-stepper-step>
+
+                <v-divider></v-divider>
+
+                <v-stepper-step :complete="currentStep > 3" step="4"> 分辨率测试 </v-stepper-step>
+                <v-divider></v-divider>
+
+                <v-stepper-step :complete="currentStep > 4" step="5"> 连通性测试 </v-stepper-step>
               </v-stepper-header>
 
               <v-stepper-items>
-                <!-- mic test -->
+                <!-- system requirements test -->
                 <v-stepper-content step="1">
+                  <v-row>
+                    <v-col md6>
+                      <v-card color="info" height="100%">
+                        <v-card-title>
+                          <div class="headline">
+                            {{ text.browser_check }}
+                          </div>
+                        </v-card-title>
+                        <v-card-text>
+                          {{ text.support_desc }}
+                        </v-card-text>
+                      </v-card>
+                    </v-col>
+                    <v-col md6>
+                      <v-card color="info" height="100%">
+                        <v-card-title>
+                          {{ text.checking }}
+                        </v-card-title>
+                        <v-card-text>
+                          <v-progress-linear
+                            :indeterminate="true"
+                          ></v-progress-linear>
+                        </v-card-text>
+                      </v-card>
+                    </v-col>
+                  </v-row>
+                </v-stepper-content>
+
+                <!-- mic test -->
+                <v-stepper-content step="2">
                   <v-row>
                     <v-col md6>
                       <v-card color="info" height="100%">
@@ -73,7 +111,7 @@
                 </v-stepper-content>
 
                 <!-- speaker test -->
-                <v-stepper-content step="2">
+                <v-stepper-content step="3">
                   <v-row>
                     <v-col md6>
                       <v-card color="info" height="100%">
@@ -85,7 +123,7 @@
                         <v-card-text>
                           {{ text.speaker_check_desc }}
                         </v-card-text>
-                        <v-btn @click="currentStep = 3"> Continue </v-btn>
+                        <v-btn @click="currentStep = 4"> Continue </v-btn>
 
                         <v-btn text color="error"> Cancel </v-btn>
                       </v-card>
@@ -110,7 +148,7 @@
                 </v-stepper-content>
 
                 <!-- resolution test -->
-                <v-stepper-content step="3">
+                <v-stepper-content step="4">
                   <v-row>
                     <v-col md6>
                       <v-card color="info" height="100%">
@@ -128,26 +166,61 @@
                     <v-col md6>
                       <v-card height="100%">
                         <v-card-title>
-                           {{text.resolution_list}} </v-card-title>
+                          {{ text.resolution_list }}
+                        </v-card-title>
                         <v-card-text>
                           <v-list>
                             <v-list-item
-                              v-for="(profile,index) in profiles"
+                              v-for="(profile, index) in profiles"
                               :key="index"
                             >
                               <v-list-item-content>
                                 <v-list-item-title>{{
                                   profile.resolution
                                 }}</v-list-item-title>
-                                <v-list-tile-action icon>
-                                  <v-icon v-if="profile.status==='resolve'" color="success">done</v-icon>
-                                  <v-icon v-else-if="profile.status==='reject'" color="error">close</v-icon>
-                                  <v-icon v-else>more_horiz</v-icon>
-                                </v-list-tile-action>
+                                <v-list-item-action icon>
+                                  <v-icon
+                                    v-if="profile.status === 'resolve'"
+                                    color="success"
+                                    >done</v-icon
+                                  >
+                                  <v-icon
+                                    v-else-if="profile.status === 'reject'"
+                                    color="error"
+                                    >close</v-icon
+                                  >
+                                  <v-icon v-else>pending</v-icon>
+                                </v-list-item-action>
                               </v-list-item-content>
                             </v-list-item>
                           </v-list>
                         </v-card-text>
+                      </v-card>
+                    </v-col>
+                  </v-row>
+                </v-stepper-content>
+
+                <!-- connection test -->
+                 <v-stepper-content step="5">
+                  <v-row>
+                    <v-col md6>
+                      <v-card color="info" height="100%">
+                        <v-card-title>
+                          <div class="headline">
+                            {{ text.speacker_check }}
+                          </div>
+                        </v-card-title>
+                        <v-card-text>
+                          {{ text.speaker_check_desc }}
+                        </v-card-text>
+                        <v-btn @click="connectionTest"> Continue </v-btn>
+                      </v-card>
+                    </v-col>
+                    <v-col md6>
+                      <v-card color="info" height="100%">
+                        <v-card-title>
+                          <div class="headline">{{ text.sample_music }}</div>
+                        </v-card-title>
                       </v-card>
                     </v-col>
                   </v-row>
@@ -172,9 +245,10 @@ export default {
     return {
       client: {},
       localStream: {},
-      currentStep: 0,
+      currentStep: 5,
       inputVolume: 0,
       uid: "",
+      meetSystemRequirements: false,
       testUnites: [
         {
           id: "0",
@@ -228,26 +302,37 @@ export default {
   },
   mounted() {
     this.client = webRTC.createClient({
-      appkey: "4727023efa991d31d61b3b32e819bd5b",
-      debug: true,
+      appkey: "45c6af3c98409b18a84451215d0bdd6e",
+      debug: false,
     });
+
+    this.client.on("network-quality",function(evt){
+        console.log("local network-quality"+JSON.stringify(evt));//此client接收数据，用来检查下行网络
+      })
   },
   methods: {
     startTest() {
       this.currentStep++;
+      setTimeout(() => {
+        this.systemRequirementsTest()
+      }, 1500);
+      // this.systemRequirementsTest();
+    },
+    systemRequirementsTest() {
+      this.meetSystemRequirements = webRTC.checkSystemRequirements();
+      console.log(this.meetSystemRequirements);
+      this.currentStep++;
       this.audioTest();
     },
     audioTest() {
-      this.uid = Math.floor(Math.random() * 10000);
-      this.localStream = webRTC.createStream({
-        uid: this.uid,
+      let localStream = webRTC.createStream({
+        uid: Math.floor(Math.random() * 10000),
         audio: true,
         video: true,
         screen: false,
       });
-
-      this.localStream.init().then(() => {
-        this.localStream
+      localStream.init().then(() => {
+        localStream
           .play(null, {
             audio: true,
             video: false,
@@ -261,12 +346,12 @@ export default {
           });
         let _this = this;
         let micTestTimer = setInterval(() => {
-          _this.inputVolume = parseInt(this.localStream.getAudioLevel() * 100);
+          _this.inputVolume = parseInt(localStream.getAudioLevel() * 100);
         }, 100);
         setTimeout(() => {
           clearInterval(micTestTimer);
-          console.log(this.localStream.getAudioTrack());
-          this.localStream.destroy();
+          console.log(localStream.getAudioTrack());
+          localStream.destroy();
           // .then(() => {
           //   console.warn("关闭 mic sucess");
           // })
@@ -274,7 +359,7 @@ export default {
           //   console.warn("关闭 mic 失败: ", err);
           // });
 
-          this.currentStep = 2;
+          this.currentStep = 3;
         }, 3000);
       });
     },
@@ -285,23 +370,109 @@ export default {
       let localStream = webRTC.createStream({
         uid: Math.floor(Math.random() * 10000),
         audio: false,
-        video: true
+        video: true,
       });
       for (let profile of this.profiles) {
         localStream.setVideoProfile({
           profile: webRTC[`${profile.resolution}`],
         });
-        localStream.init().then(() => {
-          console.log(`${profile.resolution} init success`);
-          profile.status="resolve";
-          localStream.destroy();
-        }).catch(()=>{
-          console.log(`${profile.resolution} init failed`);
-          profile.status="reject";
-          localStream.destroy();
-        });
+        localStream
+          .init()
+          .then(() => {
+            console.log(`${profile.resolution} init success`);
+            profile.status = "resolve";
+            localStream.destroy();
+          })
+          .catch(() => {
+            console.log(`${profile.resolution} init failed`);
+            profile.status = "reject";
+            localStream.destroy();
+          });
       }
     },
+    connectionTest(){
+      let localUid=Math.floor(Math.random() * 10000);
+      this.client.join({
+          channelName: '房间名称',
+          uid: localUid,
+          token: ''
+      }).then(() => {
+          console.info('加入房间成功...')
+          //初始化本地流，并且发布
+          let localStream = webRTC.createStream({
+            uid: localUid,
+            audio: false,
+            video: true,
+          });
+          //启动媒体，打开实例对象中设置的媒体设备
+          localStream.init().then(() => {
+              console.warn('音视频开启完成，可以播放了')
+              localStream
+              .play(null, {
+                audio: true,
+                video: false,
+                screen: false,
+              })
+              .then(() => {
+                console.warn("播放成功");
+              })
+              .catch((err) => {
+                console.warn("播放失败: ", err);
+              });
+              // 发布
+              this.client.publish(localStream).then(() => {
+                    console.warn('本地 publish 成功')
+                }).catch(err => {
+                    console.error('本地 publish 失败: ', err)
+                })
+          }).catch(err => {
+              console.warn('音视频初始化失败: ', err)
+              localStream = null
+          })
+      })
+
+      let remoteClient = webRTC.createClient({
+        appkey: '45c6af3c98409b18a84451215d0bdd6e', //您的 appkey
+        debug: true, //是否开启调试日志
+      });
+      let remoteUid=Math.floor(Math.random() * 10000);
+      remoteClient.join({
+          channelName: '房间名称',
+          uid: remoteUid,
+          token: ''
+      }).then(() => {
+          console.info('加入房间成功...')
+      })
+
+      remoteClient.on('stream-added', evt => {
+          let remoteStream = evt.stream;
+          console.warn('收到对方发布的订阅消息: ', remoteStream.getId())
+          remoteStream.setSubscribeConfig({
+              audio: true,
+              video: true,
+              screen: true
+          })
+          remoteClient.subscribe(remoteStream).then(() => {
+              console.warn('本地 subscribe 成功')
+          }).catch(err => {
+              console.warn('本地 subscribe 失败: ', err)
+          })
+      })
+
+      remoteClient.on("network-quality",function(evt){
+        console.log("remote network-quality"+JSON.stringify(evt));//此client接收数据，用来检查下行网络
+      })
+
+      setInterval(async () => {
+        const remoteVideoStatsMap = await remoteClient.getRemoteVideoStats();
+        for(var uid in remoteVideoStatsMap){
+          console.log(`Video End2EndDelay from ${uid}: ${remoteVideoStatsMap[uid].End2EndDelay}`);
+          console.log(`Video PacketLossRate from ${uid}: ${remoteVideoStatsMap[uid].PacketLossRate}`);
+          console.log(`Video RecvBitrate from ${uid}: ${remoteVideoStatsMap[uid].RecvBitrate}`);
+          console.log(`Video TransportDelay from ${uid}: ${remoteVideoStatsMap[uid].TransportDelay}`);
+        }
+      }, 1000)
+    }
   },
 };
 </script>
