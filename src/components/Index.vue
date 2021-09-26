@@ -2,13 +2,14 @@
   <v-app>
     <v-app-bar color="primary" app>
       <v-spacer></v-spacer>
-      <v-btn color="success" @click="startTest">
+      <v-btn color="success" v-if="testing == false" @click="startTest">
         {{ text.start_text }}
       </v-btn>
     </v-app-bar>
     <v-main>
       <v-container>
         <v-row wrap fill-height>
+          <!-- start page -->
           <v-col md4 offset-md4 v-if="currentStep == 0">
             <v-card>
               <v-card-title>{{ text.following_step }}</v-card-title>
@@ -23,6 +24,24 @@
               </v-card-text>
             </v-card>
           </v-col>
+          <!-- result page -->
+          <v-col md4 offset-md4 v-else-if="currentStep == 6">
+            <v-card>
+              <v-card-title>{{ text.test_report }}</v-card-title>
+              <v-card-text>
+                <v-list>
+                  <v-list-item v-for="item in testUnites" :key="item.id">
+                    <v-list-item-content>
+                      <v-list-item-title>{{ item.label }}</v-list-item-title>
+                      <v-icon v-if="item.notError" color="success">Good</v-icon>
+                      <v-icon v-else color="error">Failed</v-icon>
+                    </v-list-item-content>
+                  </v-list-item>
+                </v-list>
+              </v-card-text>
+            </v-card>
+          </v-col>
+
           <v-col md4 offset-md4 v-else>
             <v-stepper v-model="currentStep">
               <v-stepper-header>
@@ -127,9 +146,9 @@
                         <v-card-text>
                           {{ text.speaker_check_desc }}
                         </v-card-text>
-                        <v-btn @click="speakerTest"> Continue </v-btn>
+                        <v-btn @click="speakerTest"> 听得见 </v-btn>
 
-                        <v-btn text color="error"> Cancel </v-btn>
+                        <v-btn text color="error"> 听不见 </v-btn>
                       </v-card>
                     </v-col>
                     <v-col md6>
@@ -185,12 +204,12 @@
                                   <v-icon
                                     v-if="profile.status === 'resolve'"
                                     color="success"
-                                    >done</v-icon
+                                    >Good</v-icon
                                   >
                                   <v-icon
                                     v-else-if="profile.status === 'reject'"
                                     color="error"
-                                    >close</v-icon
+                                    >Failed</v-icon
                                   >
                                   <v-icon v-else>pending</v-icon>
                                 </v-list-item-action>
@@ -219,8 +238,6 @@
                             :settings="chartSettings"
                           ></ve-line>
                         </v-card-text>
-
-                        <v-btn @click="connectionTest"> Continue </v-btn>
                       </v-card>
                     </v-col>
                     <v-col md6>
@@ -249,7 +266,7 @@ import * as i18n from "../utils/i18n";
 import * as webRTC from "../utils/NIM_Web_NERTC_v4.4.1";
 import { profileArray } from "../utils/resolutionList";
 export default {
-  name: "HelloWorld",
+  name: "Index",
 
   data() {
     return {
@@ -317,6 +334,7 @@ export default {
         ],
       },
       subscribed: false,
+      testing: false,
     };
   },
   computed: {
@@ -335,12 +353,13 @@ export default {
   mounted() {
     this.client = webRTC.createClient({
       appkey: "45c6af3c98409b18a84451215d0bdd6e",
-      debug: false,
+      debug: true,
     });
   },
   methods: {
     startTest() {
       this.currentStep++;
+      this.testing = true;
       setTimeout(() => {
         this.systemRequirementsTest();
       }, 1500);
@@ -351,36 +370,62 @@ export default {
       this.audioTest();
     },
     audioTest() {
-      let localStream = webRTC.createStream({
-        uid: Math.floor(Math.random() * 10000),
-        audio: true,
-        video: false,
-        screen: false,
-      });
-      localStream.init().then(() => {
-        localStream
-          .play(null, {
-            audio: true,
-            video: false,
-            screen: false,
+      let localUid=Math.floor(Math.random() * 10000);
+      this.client
+          .join({
+            channelName: "房间名称",
+            uid: localUid,
+            token: "",
           })
           .then(() => {
-            console.warn("播放成功");
-          })
-          .catch((err) => {
-            console.warn("播放失败: ", err);
+            console.info("加入房间成功...");
+            //初始化本地流，并且发布
+            let localStream = webRTC.createStream({
+              uid: localUid,
+              audio: true,
+              video: false,
+            });
+            //启动媒体，打开实例对象中设置的媒体设备
+            localStream
+              .init()
+              .then(() => {
+                console.warn("音视频开启完成，可以播放了");
+                localStream
+                  .play(null, {
+                    audio: true,
+                    video: false,
+                  })
+                  .then(() => {
+                    console.warn("播放成功");
+                  })
+                  .catch((err) => {
+                    console.warn("播放失败: ", err);
+                  });
+                // 发布
+                this.client
+                  .publish(localStream)
+                  .then(() => {
+                    console.warn("本地 publish 成功");
+                  })
+                  .catch((err) => {
+                    console.error("本地 publish 失败: ", err);
+                  });
+              })
+              .catch((err) => {
+                console.warn("音视频初始化失败: ", err);
+                localStream = null;
+              });
+
+            let _this = this;
+            let micTestTimer = setInterval(() => {
+              _this.inputVolume = parseInt(localStream.getAudioLevel() * 100);
+            }, 100);
+            setTimeout(() => {
+              clearInterval(micTestTimer);
+              this.client.leave();
+              this.currentStep = 3;
+            }, 3000);
           });
-        let _this = this;
-        let micTestTimer = setInterval(() => {
-          _this.inputVolume = parseInt(localStream.getAudioLevel() * 100);
-        }, 100);
-        setTimeout(() => {
-          clearInterval(micTestTimer);
-          console.log(localStream.getAudioTrack());
-          localStream.destroy();
-          this.currentStep = 3;
-        }, 3000);
-      });
     },
     speakerTest() {
       this.resolutionTest();
@@ -535,7 +580,42 @@ export default {
 
       setTimeout(() => {
         clearInterval(statsTimer);
+        this.client.leave();
+        remoteClient.leave();
+        this.currentStep = 6;
+        this.restore();
       }, 10000);
+    },
+    restore() {
+      setTimeout(() => {
+        this.currentStep = 0;
+        this.testing = false;
+        this.bitrateData= {
+          columns: ["index", "tVideoBitrate", "tAudioBitrate"],
+          rows: [
+              {
+                index: 0,
+                tVideoBitrate: 0,
+                tAudioBitrate: 0,
+              },
+            ],
+        };
+        this.packetsData={
+          columns: ["index", "tVideoPacketLoss", "tAudioPacketLoss"],
+          rows: [
+            {
+              index: 0,
+              tVideoPacketLoss: 0,
+              tAudioPacketLoss: 0,
+            },
+          ],
+        };
+        this.inputVolume=0;
+        this.subscribed=false;
+        for (let profile of this.profiles) {
+          profile.status='pending';
+        }
+      }, 3000);
     },
   },
 };
