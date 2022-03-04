@@ -33,8 +33,8 @@
                   <v-list-item v-for="item in testUnites" :key="item.id">
                     <v-list-item-content>
                       <v-list-item-title>{{ item.label }}</v-list-item-title>
-                      <v-icon v-if="item.notError" color="success">Good</v-icon>
-                      <v-icon v-else color="error">Failed</v-icon>
+                      <v-icon v-if="item.notError" color="success">良好</v-icon>
+                      <v-icon v-else color="error">异常</v-icon>
                     </v-list-item-content>
                   </v-list-item>
                 </v-list>
@@ -146,9 +146,9 @@
                         <v-card-text>
                           {{ text.speaker_check_desc }}
                         </v-card-text>
-                        <v-btn @click="speakerTest"> 听得见 </v-btn>
+                        <v-btn @click="speakerTest" style="margin-left:16px"> 听得见 </v-btn>
 
-                        <v-btn text color="error"> 听不见 </v-btn>
+                        <v-btn @click="speakerTestError" text color="error"> 听不见 </v-btn>
                       </v-card>
                     </v-col>
                     <v-col md6>
@@ -204,14 +204,14 @@
                                   <v-icon
                                     v-if="profile.status === 'resolve'"
                                     color="success"
-                                    >Good</v-icon
+                                    >良好</v-icon
                                   >
                                   <v-icon
                                     v-else-if="profile.status === 'reject'"
                                     color="error"
-                                    >Failed</v-icon
+                                    >异常</v-icon
                                   >
-                                  <v-icon v-else>pending</v-icon>
+                                  <v-icon v-else>等待中</v-icon>
                                 </v-list-item-action>
                               </v-list-item-content>
                             </v-list-item>
@@ -263,7 +263,7 @@
 
 <script>
 import * as i18n from "../utils/i18n";
-import * as webRTC from "../utils/NIM_Web_NERTC_v4.4.1";
+import * as webRTC from "../utils/NIM_Web_NERTC_v4.5.1";
 import { profileArray } from "../utils/resolutionList";
 export default {
   name: "Index",
@@ -279,31 +279,31 @@ export default {
       testUnites: [
         {
           id: "0",
-          label: "browser_compatibility",
+          label: "浏览器兼容性",
           notError: true,
           extra: "",
         },
         {
           id: "1",
-          label: "microphone",
+          label: "麦克风",
           notError: true,
           extra: "",
         },
         {
           id: "2",
-          label: "speaker",
+          label: "扬声器",
           notError: true,
           extra: "",
         },
         {
           id: "3",
-          label: "resolution",
+          label: "分辨率",
           notError: true,
           extra: "",
         },
         {
           id: "4",
-          label: "connection",
+          label: "连通性",
           notError: true,
           extra: "",
         },
@@ -314,22 +314,22 @@ export default {
       }),
       chartSettings: {},
       bitrateData: {
-        columns: ["index", "tVideoBitrate", "tAudioBitrate"],
+        columns: ["index", "发送视频码率", "发送音频码率"],
         rows: [
           {
             index: 0,
-            tVideoBitrate: 0,
-            tAudioBitrate: 0,
+            发送视频码率: 0,
+            发送音频码率: 0,
           },
         ],
       },
       packetsData: {
-        columns: ["index", "tVideoPacketLoss", "tAudioPacketLoss"],
+        columns: ["index", "发送视频丢包率", "发送音频丢包率"],
         rows: [
           {
             index: 0,
-            tVideoPacketLoss: 0,
-            tAudioPacketLoss: 0,
+            发送视频丢包率: 0,
+            发送音频丢包率: 0,
           },
         ],
       },
@@ -365,9 +365,14 @@ export default {
       }, 1500);
     },
     systemRequirementsTest() {
-      this.meetSystemRequirements = webRTC.checkSystemRequirements();
-      this.currentStep++;
-      this.audioTest();
+      try{
+        this.meetSystemRequirements = webRTC.checkSystemRequirements();
+        this.currentStep++;
+        this.audioTest();
+      }catch(ex){
+        (this.testUnites.find(e=>e.id==0)).notError=false; 
+      }
+      
     },
     audioTest() {
       let localUid=Math.floor(Math.random() * 10000);
@@ -400,6 +405,7 @@ export default {
                   })
                   .catch((err) => {
                     console.warn("播放失败: ", err);
+                    (this.testUnites.find(e=>e.id==1)).notError=false;
                   });
                 // 发布
                 this.client
@@ -409,11 +415,13 @@ export default {
                   })
                   .catch((err) => {
                     console.error("本地 publish 失败: ", err);
+                    (this.testUnites.find(e=>e.id==1)).notError=false;
                   });
               })
               .catch((err) => {
                 console.warn("音视频初始化失败: ", err);
                 localStream = null;
+                (this.testUnites.find(e=>e.id==1)).notError=false; 
               });
 
             let _this = this;
@@ -422,6 +430,8 @@ export default {
             }, 100);
             setTimeout(() => {
               clearInterval(micTestTimer);
+              localStream.close({ type: "audio"});
+              localStream.destroy();
               this.client.leave();
               this.currentStep = 3;
             }, 3000);
@@ -429,6 +439,10 @@ export default {
     },
     speakerTest() {
       this.resolutionTest();
+    },
+    speakerTestError() {
+      this.resolutionTest();
+      (this.testUnites.find(e=>e.id==2)).notError=false;
     },
     resolutionTest() {
       this.currentStep = 4;
@@ -455,11 +469,14 @@ export default {
             .then(() => {
               console.log(`${profile.resolution} init success`);
               profile.status = "resolve";
+              localStream.close({ type: "video"});
               localStream.destroy();
             })
             .catch(() => {
+              (this.testUnites.find(e=>e.id==3)).notError=false; 
               console.log(`${profile.resolution} init failed`);
               profile.status = "reject";
+              localStream.close({ type: "video"});
               localStream.destroy();
             });
         }
@@ -495,7 +512,7 @@ export default {
                 console.warn("音视频开启完成，可以播放了");
                 localStream
                   .play(null, {
-                    audio: true,
+                    audio: false,
                     video: true,
                   })
                   .then(() => {
@@ -535,11 +552,11 @@ export default {
             console.info("加入房间成功...");
           });
 
-        remoteClient.on("stream-added", (evt) => {
+        remoteClient.on("stream-added", (evt) => {        
           let remoteStream = evt.stream;
           console.warn("收到对方发布的订阅消息: ", remoteStream.getId());
           remoteStream.setSubscribeConfig({
-            audio: true,
+            audio: false,
             video: true,
           });
           remoteClient
@@ -565,16 +582,22 @@ export default {
         const localAudioStats = await _this.client.getLocalAudioStats();
         const remoteVideoStatsMap = await remoteClient.getRemoteVideoStats();
         const remoteAudioStatsMap = await remoteClient.getRemoteAudioStats();
-        _this.bitrateData.rows.push({
-          index: indexCount,
-          tVideoBitrate: localAudioStats[0].SendBitrate,
-          tAudioBitrate: localVideoStats[0].SendBitrate,
-        });
-        _this.packetsData.rows.push({
-          index: indexCount,
-          tVideoPacketLoss: remoteVideoStatsMap[localUid].PacketLossRate,
-          tAudioPacketLoss: remoteAudioStatsMap[localUid].PacketLossRate,
-        });
+        if(localVideoStats[0]!=null && localAudioStats[0]!=null){
+            _this.bitrateData.rows.push({
+              index: indexCount,
+              发送视频码率: localAudioStats[0].SendBitrate,
+              发送音频码率: localVideoStats[0].SendBitrate,
+            });
+        }
+
+        if(remoteVideoStatsMap[localUid]!=null && remoteAudioStatsMap[localUid]!=null){
+            _this.packetsData.rows.push({
+            index: indexCount,
+            发送视频丢包率: remoteVideoStatsMap[localUid].PacketLossRate,
+            发送音频丢包率: remoteAudioStatsMap[localUid].PacketLossRate,
+          });
+        }
+
         indexCount++;
       }, 1000);
 
@@ -591,22 +614,22 @@ export default {
         this.currentStep = 0;
         this.testing = false;
         this.bitrateData= {
-          columns: ["index", "tVideoBitrate", "tAudioBitrate"],
+          columns: ["index", "发送视频码率", "发送音频码率"],
           rows: [
               {
                 index: 0,
-                tVideoBitrate: 0,
-                tAudioBitrate: 0,
+                发送视频码率: 0,
+                发送音频码率: 0,
               },
             ],
         };
         this.packetsData={
-          columns: ["index", "tVideoPacketLoss", "tAudioPacketLoss"],
+          columns: ["index", "发送视频丢包率", "发送音频丢包率"],
           rows: [
             {
               index: 0,
-              tVideoPacketLoss: 0,
-              tAudioPacketLoss: 0,
+              发送视频丢包率: 0,
+              发送音频丢包率: 0,
             },
           ],
         };
@@ -615,7 +638,7 @@ export default {
         for (let profile of this.profiles) {
           profile.status='pending';
         }
-      }, 3000);
+      }, 8000);
     },
   },
 };
